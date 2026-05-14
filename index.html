@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="no">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Gårdskart Dashboard</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.css" />
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="/style.css">
+  </head>
+  <body class="bg-gray-100 h-screen flex overflow-hidden font-sans text-gray-800">
+    
+    <aside class="w-80 bg-white shadow-xl z-20 flex flex-col">
+      <div class="p-6 bg-emerald-700 text-white">
+        <h1 class="text-2xl font-bold">Gårdskart PRO</h1>
+        <p class="text-sm opacity-80">Areal & Tilskudd</p>
+      </div>
+      <div class="p-6 flex-1 overflow-y-auto space-y-6">
+        <div>
+          <h2 class="font-semibold mb-2">1. Velg Eiendom</h2>
+          <p class="text-sm text-gray-500 mb-3">Klikk i kartet for å autovelge teig, eller bruk tegneverktøyet.</p>
+          <button id="drawBtn" class="w-full bg-emerald-100 text-emerald-800 py-2 rounded-md font-medium hover:bg-emerald-200 transition">
+            ✏️ Aktiver Frihåndstegning
+          </button>
+        </div>
+        <div>
+          <h2 class="font-semibold mb-2">2. Kartlag</h2>
+          <div class="space-y-2 text-sm" id="layerControls">
+            </div>
+        </div>
+      </div>
+    </aside>
+
+    <main class="flex-1 relative z-10">
+      <div id="map" class="h-full w-full"></div>
+    </main>
+
+    <aside class="w-96 bg-white shadow-xl z-20 flex flex-col border-l border-gray-200">
+      <div class="p-6 border-b border-gray-100">
+        <h2 class="text-xl font-bold text-gray-800">Kalkyle</h2>
+        <p class="text-sm text-gray-500" id="gbnrText">Gbnr: Venter på valg...</p>
+      </div>
+      <div class="p-6 space-y-4">
+        <div class="bg-gray-50 p-4 rounded-lg border border-gray-200">
+          <div class="flex justify-between mb-2">
+            <span class="text-gray-600">Totalt Areal</span>
+            <span class="font-bold" id="valAreal">0.0 daa</span>
+          </div>
+          <div class="flex justify-between mb-2">
+            <span class="text-gray-600">Bratt terreng (>20°)</span>
+            <span class="font-bold text-orange-600" id="valBratt">0.0 daa</span>
+          </div>
+        </div>
+        <div class="bg-emerald-50 p-4 rounded-lg border border-emerald-200">
+          <div class="flex justify-between items-center">
+            <span class="text-emerald-800 font-semibold">Estimert Tilskudd</span>
+            <span class="text-2xl font-bold text-emerald-700" id="valSum">0 kr</span>
+          </div>
+        </div>
+      </div>
+    </aside>
+    <script src="https://cdn.jsdelivr.net/npm/@turf/turf@6/turf.min.js"></script>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.js"></script>
+    <script type="module" src="/main.js"></script>
+  </body>
+</html>

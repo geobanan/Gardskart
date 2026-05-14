@@ -1,0 +1,11 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Fikser Leaflet Draw UI slik at det ser pent ut i Tailwind */
+.leaflet-control-container .leaflet-draw {
+  display: none; /* Skjuler standard-verktøylinjen, vi styrer den fra vår egen knapp */
+}
+#map {
+  cursor: crosshair;
+}
