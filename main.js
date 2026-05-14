@@ -1,36 +1,34 @@
-// Initier kartet, sentrert på et fint område
+import './style.css';
+
+// --- 1. KARTOPPSETT ---
 const map = L.map('map', { zoomControl: false }).setView([62.47, 6.35], 14);
 L.control.zoom({ position: 'topright' }).addTo(map);
 
-// Kartlag
-const flyfoto = L.tileLayer
-  .wms('https://wms.geonorge.no/skwms1/wms.nib', {
-    layers: 'ortofoto',
-    format: 'image/jpeg',
-  })
-  .addTo(map);
-const topokart = L.tileLayer(
-  'https://cache.kartverket.no/v1/wmts/1.0.0/topo/default/webmercator/{z}/{y}/{x}.png'
-);
-const matrikkel = L.tileLayer
-  .wms('https://wms.geonorge.no/skwms1/wms.matrikkelkart', {
-    layers: 'eiendomsgrense',
-    format: 'image/png',
-    transparent: true,
-    opacity: 0.8,
-  })
-  .addTo(map);
-const bratthet = L.tileLayer.wms(
-  'https://wms.geonorge.no/skwms1/wms.bratthet',
-  {
-    layers: 'Bratthet_Over_20',
-    format: 'image/png',
-    transparent: true,
-    opacity: 0.6,
-  }
-);
+// --- 2. KARTLAG ---
+const flyfoto = L.tileLayer.wms('https://wms.geonorge.no/skwms1/wms.nib', {
+  layers: 'ortofoto', format: 'image/jpeg', attribution: "Norge i Bilder"
+}).addTo(map);
 
-// Tegneverktøy
+const topokart = L.tileLayer('https://cache.kartverket.no/v1/wmts/1.0.0/topo/default/webmercator/{z}/{y}/{x}.png', {
+  attribution: "Kartverket"
+});
+
+const matrikkel = L.tileLayer.wms('https://wms.geonorge.no/skwms1/wms.matrikkelkart', {
+  layers: 'eiendomsgrense', format: 'image/png', transparent: true, opacity: 0.8
+}).addTo(map);
+
+const bratthet = L.tileLayer.wms('https://wms.geonorge.no/skwms1/wms.bratthet', {
+  layers: 'Bratthet_Over_20', format: 'image/png', transparent: true, opacity: 0.6
+});
+
+L.control.layers(
+  { "Flyfoto": flyfoto, "Topografisk": topokart },
+  { "Eiendomsgrenser": matrikkel, "Bratthet (>20 grader)": bratthet },
+  { position: 'bottomright' }
+).addTo(map);
+
+
+// --- 3. TEGNEVERKTØY ---
 const drawnItems = new L.FeatureGroup();
 map.addLayer(drawnItems);
 const drawControl = new L.Control.Draw({
@@ -39,84 +37,83 @@ const drawControl = new L.Control.Draw({
 });
 map.addControl(drawControl);
 
-// Egendefinert knapp for å tegne
-let drawPolygon = new L.Draw.Polygon(map, drawControl.options.draw.polygon);
+const drawPolygon = new L.Draw.Polygon(map, drawControl.options.draw.polygon);
 document.getElementById('drawBtn').addEventListener('click', () => {
   drawPolygon.enable();
 });
 
-// Håndter fullført tegning
+
+// --- 4. FELLES FUNKSJON FOR UTREGNING ---
+function oppdaterKalkyle(geojson, tittelTekst) {
+  const arealKvm = turf.area(geojson);
+  const arealDekar = (arealKvm / 1000).toFixed(1);
+  const estimertTilskudd = Math.round(arealDekar * 200);
+
+  document.getElementById('gbnrText').innerText = tittelTekst;
+  document.getElementById('valAreal').innerText = `${arealDekar} daa`;
+  document.getElementById('valSum').innerText = `${estimertTilskudd.toLocaleString('no-NO')} kr`;
+}
+
+
+// --- 5. HENDELSE: NÅR BONDEN TEGNER FERDIG ---
 map.on(L.Draw.Event.CREATED, (e) => {
   drawnItems.clearLayers();
   drawnItems.addLayer(e.layer);
 
-  // Her må vi senere regne ut arealet!
-  document.getElementById('valAreal').innerText = 'Venter på server...';
+  const geojson = e.layer.toGeoJSON();
+  oppdaterKalkyle(geojson, "📍 Egendefinert opptegning");
 });
-// Håndter klikk i kartet for å autovelge eiendom
+
+
+// --- 6. HENDELSE: KLIKK I KARTET (HENT VIA VERCEL API) ---
 map.on('click', async (e) => {
   const lat = e.latlng.lat;
   const lng = e.latlng.lng;
 
-  document.getElementById('gbnrText').innerText =
-    '⏳ Henter eiendom fra Kartverket...';
+  document.getElementById('gbnrText').innerText = '⏳ Henter jordsmonn fra NIBIO...';
 
-  // Lag en bitteliten boks (Bounding Box) rundt klikket for API-søket
   const delta = 0.0001;
-  const bbox = `${lng - delta},${lat - delta},${lng + delta},${
-    lat + delta
-  },EPSG:4326`;
+  const bbox = `${lng - delta},${lat - delta},${lng + delta},${lat + delta}`;
 
-  // Kartverkets Åpne WFS-API for Matrikkelkart
-  const wfsUrl = `https://wfs.geonorge.no/skwms1/wfs.matrikkelkart?service=WFS&version=1.1.0&request=GetFeature&typeName=matrikkelkart:Teig&outputFormat=application/json&srsName=EPSG:4326&bbox=${bbox}`;
+  // URL til ditt nye Vercel-API
+  const wfsUrl = `/api/nibio?bbox=${bbox}`;
 
   try {
     const response = await fetch(wfsUrl);
-    if (!response.ok) throw new Error('Feil mot Kartverket');
+    if (!response.ok) throw new Error("Fikk ikke svar fra Vercel-serveren");
 
-    const data = await response.json();
+    const textData = await response.text();
+    if (textData.startsWith("<?xml")) throw new Error("NIBIO sendte XML, forventet JSON.");
 
-    // Sjekk om vi traff en eiendom
+    const data = JSON.parse(textData);
+
     if (data.features && data.features.length > 0) {
-      const teig = data.features[0]; // Tar den første eiendommen vi traff
+      const polygon = data.features[0];
 
-      // 1. Fjern gamle tegninger
       drawnItems.clearLayers();
-
-      // 2. Tegn opp eiendommen i kartet (med en stilig oransje farge)
-      const eiendomsLag = L.geoJSON(teig, {
-        style: { color: '#f59e0b', weight: 3, fillOpacity: 0.3 },
+      const jordLag = L.geoJSON(polygon, {
+        style: { color: '#10b981', weight: 3, fillOpacity: 0.3 },
       });
-      drawnItems.addLayer(eiendomsLag);
+      drawnItems.addLayer(jordLag);
+      map.fitBounds(jordLag.getBounds());
 
-      // Zoom kartet slik at hele eiendommen vises perfekt
-      map.fitBounds(eiendomsLag.getBounds());
+      const artypeKode = polygon.properties.artype;
+      const typeKart = {
+        21: "🌾 Fulldyrka jord",
+        22: "🚜 Overflatedyrka",
+        23: "🐄 Innmarksbeite",
+        30: "🌲 Skog",
+        60: "💧 Myr"
+      };
 
-      // 3. Hent Gårds- og bruksnummer
-      const props = teig.properties;
-      document.getElementById(
-        'gbnrText'
-      ).innerText = `📍 Gnr ${props.gardsnummer} / Bnr ${props.bruksnummer} (${props.kommunenavn})`;
+      const arealTypeNavn = typeKart[artypeKode] || `Areal (Kode: ${artypeKode})`;
+      oppdaterKalkyle(polygon, arealTypeNavn);
 
-      // 4. Regn ut areal med Turf.js! (Gir kvadratmeter, vi deler på 1000 for Dekar)
-      const arealKvm = turf.area(teig);
-      const arealDekar = (arealKvm / 1000).toFixed(1);
-
-      // 5. Oppdater Dashbordet
-      document.getElementById('valAreal').innerText = `${arealDekar} daa`;
-
-      // Superenkel mock-utregning av tilskudd (f.eks 200kr per dekar)
-      const estimertTilskudd = Math.round(arealDekar * 200);
-      document.getElementById(
-        'valSum'
-      ).innerText = `${estimertTilskudd.toLocaleString('no-NO')} kr`;
     } else {
-      document.getElementById('gbnrText').innerText =
-        '⚠️ Fant ingen eiendom her.';
+      document.getElementById('gbnrText').innerText = '⚠️ Fant ingen NIBIO-polygon her.';
     }
   } catch (error) {
-    console.error('WFS Feil:', error);
-    document.getElementById('gbnrText').innerText =
-      '❌ Kunne ikke koble til Kartverket.';
+    console.error('API Feil:', error);
+    document.getElementById('gbnrText').innerText = '❌ Venter på Vercel-deployment...';
   }
 });
